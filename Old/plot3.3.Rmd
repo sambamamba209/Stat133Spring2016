@@ -1,0 +1,344 @@
+---
+title: "Untitled"
+author: ""
+date: ""
+output: 
+  html_document:
+    fig_height: 3
+    fig_width: 5
+---
+<!-- Don't edit in between this line and the one below -->
+```{r include=FALSE}
+# Don't delete this chunk if you are using the DataComputing package
+library(DataComputing)
+library(maps)
+library(mapdata)
+library(ggplot2)
+library(dplyr)
+library(readxl)
+```
+*Source file* 
+```{r, results='asis', echo=FALSE}
+includeSourceDocuments()
+```
+<!-- Don't edit the material above this line -->
+**IMPORTANT: INSTALL THE MAPS PACKAGE**
+
+**CHANGE THE FILE LOCATIONS**
+
+#First Data
+
+First file:
+http://www2.census.gov/ces/bds/firm/bds_f_ageisz_release.csv
+```{r}
+firm_age_by_firm_size <- read.csv("/Users/sambamamba/Desktop/Stat_133/Stat_133 Stuff/Group Project/initialfirmsize.csv")
+firm_age_by_firm_size <- firm_age_by_firm_size[!firm_age_by_firm_size$fage4=="l) Left Censored",]
+
+firm_age_by_firm_size <-
+  firm_age_by_firm_size %>%
+  select(year2,ifsize,fage4,firms,firmdeath_firms)
+
+firm_age_by_firm_size <-
+  firm_age_by_firm_size %>%
+  mutate(size = substring(ifsize,3)) %>%
+  select(-ifsize)
+
+firm_age_by_firm_size <- firm_age_by_firm_size[!is.na(as.numeric(word(firm_age_by_firm_size$size,-1))),]
+
+
+
+firm_age_by_firm_size <- firm_age_by_firm_size[as.numeric(word(firm_age_by_firm_size$size,-1))<100,]
+
+firm_age_by_firm_size <- firm_age_by_firm_size[as.numeric(word(firm_age_by_firm_size$fage4,-1)) < 5,]
+
+
+
+firm_age_by_firm_size[is.na(firm_age_by_firm_size)] <-0
+
+
+firm_age_by_firm_size <- firm_age_by_firm_size[firm_age_by_firm_size$year2 != 0,]
+
+
+
+firm_age_by_firm_size <- aggregate(cbind(firms, firmdeath_firms) ~ year2 + fage4, data = firm_age_by_firm_size, FUN = 'sum')
+
+firm_age_by_firm_size$fage4 <-
+  as.numeric(word(firm_age_by_firm_size$fage4,-1))
+```
+
+#Second Plot
+
+Second File:
+http://www2.census.gov/ces/bds/firm/bds_f_szst_release.csv
+
+
+```{r}
+
+us <- map_data("state") # To make our pretty map
+
+
+sce <- read.csv("/Users/sambamamba/Desktop/Stat_133/Stat_133 Stuff/Group Project/sizeperstate.csv")
+
+sce <- sce[as.numeric(word(sce$fsize,-1))<100,]
+
+sce <- sce[!is.na(sce$year2),]
+
+sce <-
+  sce %>%
+  select(year2,state,fsize,Firms)
+
+sce <-
+  aggregate(Firms ~ year2 + state, data = sce, FUN = 'sum')
+
+sce <- sce[!(sce$state == 11),] ##Can't keep Washington, DC :(
+
+region <- c("alabama","alaska","arizona","arkansas","california","colorado","connecticut","delaware","florida","georgia","hawaii","idaho","illinois","indiana","iowa","kansas","kentucky","louisiana","maine","maryland","massachusetts","michigan","minnesota","mississippi","missouri","montana","nebraska","nevada","new hampshire","new jersey","new mexico","new york","north carolina","north dakota","ohio","oklahoma","oregon","pennsylvania","rhode island","south carolina","south dakota","tennessee","texas","utah","vermont","virginia","washington","west virginia","wisconsin","wyoming")
+
+state <- c(1,2,4,5,6,8,9,10,12,13,15,16,17,18,19,20,21,22,23,24,25,26,2,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,44,45,46,47,48,49,50,51,53,54,55,56)
+
+df <- as.data.frame(cbind(state,region))
+
+sce <- merge(df,sce,by="state")
+sce <- select(sce,-state)
+sce <- arrange(sce,year2)
+
+total <- aggregate(Firms ~ year2, data = sce, FUN = 'sum')
+
+k = 1
+for (i in 1:nrow(sce)) {
+    sce$sce[i] = sce$Firms[i]/total$Firms[k]
+    if(i %% 50 == 0) {
+      k = k + 1
+  }
+}
+
+sce <- aggregate(sce ~ region,data = sce, FUN = 'mean')
+
+sce$sce_average_over_36_years <- sce$sce*100
+sce <- select(sce,-sce)
+
+ggplot() + 
+  geom_map(data=us, map = us, aes(x = long, y = lat, map_id = region), fill = "#ffffff", size = .15) +
+  geom_map(data = sce, map = us, aes(fill = sce_average_over_36_years, map_id=region), color = "#ffffff", size = .15) + 
+  scale_fill_continuous(low = "thistle2",high = "darkred", guide = "colorbar", name = "Average SCE %") + 
+  labs(x = NULL, y = NULL,title = "SCE average (1977-2013), by State") + 
+  theme(plot.title = element_text(size = 10,color = "blue"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank())
+```
+
+#Third Plot
+http://www2.census.gov/ces/bds/firm/bds_f_szsic_release.csv
+```{r, fig.width=10, fig.height=8}
+jobs <- read.csv("/Users/sambamamba/Desktop/Stat_133/Stat_133 Stuff/Group Project/sizepersector.csv")
+
+jobs <- select(jobs, sic1,fsize,Job_Creation_Rate, Job_Destruction_Rate,year2)
+
+jobs <- jobs[as.numeric(word(jobs$fsize,-1)) < 100,]
+
+jobs <- jobs[!is.na(jobs$sic1),]
+
+sic1 <- c(7,10,15,20,40,50,52,60,70)
+
+sector <- c("Agriculture, Forestry, and Fishing","Mining","Construction","Manufacturing","Transportation, Communication,
+and Public Utilities","Wholesale Trade","Retail Trade","Finance, Insurance, and Real Estate","Services")
+
+df <- as.data.frame(cbind(sic1,sector))
+
+jobs <- merge(df,jobs,by="sic1")
+jobs <- select(jobs,-sic1)
+
+jobs <- aggregate(cbind(Job_Destruction_Rate, Job_Creation_Rate) ~ year2 + sector, data = jobs, FUN = 'mean')
+
+jobs %>%
+  ggplot(aes(x = year2)) + 
+  geom_line(aes(y = Job_Creation_Rate, color = "Job Creation")) +
+  geom_line(aes(y = Job_Destruction_Rate, color = "Job Destruction")) + 
+  facet_wrap(~sector) + 
+  labs(y = "Rate", x = "Year", title = "Job Creation/Destruction Rate") + 
+  theme(
+    panel.border = element_blank()
+  )+ theme_minimal()+ scale_color_manual(values=c("#0033FF", "#FF3300"))
+
+jobs$difference = jobs$Job_Creation_Rate - jobs$Job_Destruction_Rate
+
+jobs %>%
+  ggplot(aes(x = year2, y = difference)) +
+  geom_point() + 
+  geom_smooth() + 
+  facet_wrap(~sector) + 
+  labs(y = "Difference", x = "Year", title = "Percent Difference Between Job Creation and Job Destruction") + geom_hline(yintercept=0, color = "red")+ theme_minimal() 
+```
+
+
+#Fourth Plot
+
+https://research.stlouisfed.org/fred2/series/GDP/downloaddata
+
+```{r, fig.width=10, fig.height=8}
+
+
+GDP <- read.csv("/Users/sambamamba/Desktop/Stat_133/Stat_133 Stuff/Group Project/GDP.csv")
+
+GDP$Average <- mean(GDP$VALUE)
+
+modelGDP<- lm(VALUE = GDP$Year, data = GDP)
+
+modelGDP%>% summary()
+
+growth_rate <- (max(GDP$VALUE)- min(GDP$VALUE))*100/min(GDP$VALUE)
+
+GDP %>% ggplot(aes(x = Year, y = VALUE)) + 
+  geom_point() + stat_smooth(method = "lm", col = "red") + theme_minimal() + labs(y = "GDP", x = "Year", title = "THE USA NOMINAL GDP")+ annotate("text", x = 1985, y = 12500, label = c("Average Percentage Growth = 4.37%"))
+
+
+```
+
+#Fifth Plot 
+# Growth Rate
+
+```{r, fig.width=10, fig.height=8}
+levels(jobs$sector)
+
+AFF <-subset(jobs, sector == "Agriculture, Forestry, and Fishing")
+modelAFF<- lm(difference ~ year2, data = AFF)
+summary(modelAFF)
+AFF$Growth<-NA
+
+for (i in 1:(nrow(AFF)-1)){
+  AFF$Growth[i+1] <- 100*(AFF[i+1,5]-AFF[i,5])/abs(AFF[i,5])
+}
+
+
+
+
+CON <-subset(jobs, sector == "Construction")
+ModelCON<- lm(difference ~ year2, data = CON)
+summary(ModelCON)
+CON$Growth<-NA
+  
+for (i in 1:(nrow(CON)-1)){
+  CON$Growth[i+1] <- 100*(CON[i+1,5]-CON[i,5])/abs(CON[i,5])
+}
+
+
+
+
+FIR <-subset(jobs, sector == "Finance, Insurance, and Real Estate")
+modelFIR<- lm(difference ~ year2, data = FIR)
+summary(modelFIR)
+FIR$Growth<-NA
+
+for (i in 1:(nrow(FIR)-1)){
+  FIR$Growth[i+1] <- 100*(FIR[i+1,5]-FIR[i,5])/abs(FIR[i,5])
+}
+
+
+
+
+MAN <-subset(jobs, sector == "Manufacturing")
+modelMAN<- lm(difference ~ year2, data = MAN)
+summary(modelMAN)
+MAN$Growth<-NA
+
+for (i in 1:(nrow(MAN)-1)){
+  MAN$Growth[i+1] <- 100*(MAN[i+1,5]-MAN[i,5])/abs(MAN[i,5])
+}
+
+
+
+
+Min <-subset(jobs, sector == "Mining")
+ModelMin<- lm(difference ~ year2, data = Min)
+summary(modelMAN)
+Min$Growth<-NA
+
+for (i in 1:(nrow(Min)-1)){
+  Min$Growth[i+1] <- 100*(Min[i+1,5]-Min[i,5])/abs(Min[i,5])
+}
+
+
+
+
+Retail <-subset(jobs, sector == "Retail Trade")
+ModelRetail<- lm(difference ~ year2, data = Retail)
+summary(ModelRetail)
+Retail$Growth<-NA
+
+for (i in 1:(nrow(Retail)-1)){
+  Retail$Growth[i+1] <- 100*(Retail[i+1,5]-Retail[i,5])/abs(Retail[i,5])
+}
+
+
+
+SER <-subset(jobs, sector == "Services")
+ModelSER<- lm(difference ~ year2, data = SER)
+summary(ModelSER)
+SER$Growth<-NA
+
+for (i in 1:(nrow(SER)-1)){
+  SER$Growth[i+1] <- 100*(SER[i+1,5]-SER[i,5])/abs(SER[i,5])
+}
+
+
+
+TCNU <-subset(jobs, sector == "Transportation, Communication,\nand Public Utilities")
+ModelTCNU<- lm(difference ~ year2, data = TCNU)
+summary(ModelTCNU)
+TCNU$Growth<-NA
+
+for (i in 1:(nrow(TCNU)-1)){
+  TCNU$Growth[i+1] <- 100*(TCNU[i+1,5]-TCNU[i,5])/abs(TCNU[i,5])
+}
+
+
+
+WT <-subset(jobs, sector == "Wholesale Trade")
+ModelWT<- lm(difference ~ year2, data = WT)
+summary(ModelWT)
+WT$Growth<-NA
+
+for (i in 1:(nrow(WT)-1)){
+  WT$Growth[i+1] <- 100*(WT[i+1,5]-WT[i,5])/abs(WT[i,5])
+}
+
+
+mean(AFF$Growth, na.rm=TRUE)
+mean(CON$Growth, na.rm=TRUE)
+mean(FIR$Growth, na.rm=TRUE)
+mean(MAN$Growth, na.rm=TRUE)
+mean(Min$Growth, na.rm=TRUE)
+mean(Retail$Growth, na.rm=TRUE)
+mean(SER$Growth, na.rm=TRUE)
+mean(TCNU$Growth, na.rm=TRUE)
+mean(WT$Growth, na.rm=TRUE)
+
+
+TotalCol <- cbind(AFF$year2,AFF$Growth,CON$Growth,FIR$Growth,MAN$Growth,Min$Growth
+                  ,Retail$Growth,SER$Growth,TCNU$Growth,WT$Growth)
+
+TotalCol <-TotalCol[-1,]
+colnames(TotalCol) <-c("Year","Agriculture, Forestry, and Fishing","Construction",
+                       "Finance, Insurance, and Real Estate","Manufacturing",
+                      "Mining","Retail Trade","Services","Transportation, Communication, and Public Utilities",  "Wholesale Trade")
+
+TotalCol <-data.frame(TotalCol)
+
+TotalCol %>%
+  ggplot(aes(x = Year, y = TotalCol$Agriculture..Forestry..and.Fishing)) +
+  geom_point() + geom_smooth()  +theme_minimal()
+
+```
+
+
+```{r, eval = FALSE}
+
+sector_weights <- jobs %>%
+  left_join(GDP, by = c("year2" = "Year")) %>%
+  mutate(GDP = VALUE) %>%
+  dplyr::select(-VALUE)
+
+
+```

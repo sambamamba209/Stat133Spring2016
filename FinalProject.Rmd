@@ -1,0 +1,179 @@
+---
+title: "Untitled"
+author: ""
+date: ""
+output: 
+  html_document:
+    fig_height: 3
+    fig_width: 5
+---
+<!-- Don't edit in between this line and the one below -->
+```{r include=FALSE}
+# Don't delete this chunk if you are using the DataComputing package
+library(DataComputing)
+library(ggplot2)
+```
+*Source file* 
+```{r, results='asis', echo=FALSE}
+includeSourceDocuments()
+```
+<!-- Don't edit the material above this line -->
+
+1st data
+
+First file:
+```{r}
+firm_age_by_firm_size <- read.csv("/Users/sambamamba/Desktop/Stat_133/Stat_133 Stuff/Group Project/initialfirmsize.csv")
+firm_age_by_firm_size <- firm_age_by_firm_size[!firm_age_by_firm_size$fage4=="l) Left Censored",]
+
+firm_age_by_firm_size <-
+  firm_age_by_firm_size %>%
+  select(year2,ifsize,fage4,firms,firmdeath_firms)
+
+firm_age_by_firm_size <-
+  firm_age_by_firm_size %>%
+  mutate(size = substring(ifsize, 3)) %>%
+  select(-ifsize)
+
+firm_age_by_firm_size <- firm_age_by_firm_size[!is.na(as.numeric(word(firm_age_by_firm_size$size,-1))),]
+
+
+
+firm_age_by_firm_size <- firm_age_by_firm_size[as.numeric(word(firm_age_by_firm_size$size,-1))<100,]
+
+firm_age_by_firm_size <- firm_age_by_firm_size[as.numeric(word(firm_age_by_firm_size$fage4,-1)) < 5,]
+
+
+
+firm_age_by_firm_size[is.na(firm_age_by_firm_size)] <-0
+
+
+firm_age_by_firm_size <- firm_age_by_firm_size[firm_age_by_firm_size$year2 != 0,]
+
+
+
+firm_age_by_firm_size <- aggregate(cbind(firms, firmdeath_firms) ~ year2 + fage4, data = firm_age_by_firm_size, FUN = 'sum')
+
+firm_age_by_firm_size$fage4 <-
+  as.numeric(word(firm_age_by_firm_size$fage4,-1))
+```
+
+2nd plot
+Second File:
+http://www2.census.gov/ces/bds/firm/bds_f_szst_release.csv
+
+```{r}
+us <- map_data("state") # To make our pretty map
+
+sce <- read.csv("/Users/sambamamba/Desktop/Stat_133/Stat_133 Stuff/Group Project/sizeperstate.csv")
+
+sce <- sce[as.numeric(word(sce$fsize,-1))<100,]
+
+sce <- sce[!is.na(sce$year2),]
+
+sce <-
+  sce %>%
+  select(year2,state,fsize,Firms)
+
+sce <-
+  aggregate(Firms ~ year2 + state, data = sce, FUN = 'sum')
+
+sce <- sce[!(sce$state == 11),] ##Can't keep Washington, DC :(
+
+region <- c("alabama","alaska","arizona","arkansas","california","colorado","connecticut","delaware","florida","georgia","hawaii","idaho","illinois","indiana","iowa","kansas","kentucky","louisiana","maine","maryland","massachusetts","michigan","minnesota","mississippi","missouri","montana","nebraska","nevada","new hampshire","new jersey","new mexico","new york","north carolina","north dakota","ohio","oklahoma","oregon","pennsylvania","rhode island","south carolina","south dakota","tennessee","texas","utah","vermont","virginia","washington","west virginia","wisconsin","wyoming")
+
+state <- c(1,2,4,5,6,8,9,10,12,13,15,16,17,18,19,20,21,22,23,24,25,26,2,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,44,45,46,47,48,49,50,51,53,54,55,56)
+
+df <- as.data.frame(cbind(state,region))
+
+sce <- merge(df,sce,by="state")
+sce <- select(sce,-state)
+sce <- arrange(sce,year2)
+
+total <- aggregate(Firms ~ year2, data = sce, FUN = 'sum')
+
+k = 1
+for (i in 1:nrow(sce)) {
+    sce$sce[i] = sce$Firms[i]/total$Firms[k]
+    if(i %% 50 == 0) {
+      k = k + 1
+  }
+}
+
+sce <- aggregate(sce ~ region,data = sce, FUN = 'mean')
+
+sce$sce_average_over_36_years <- sce$sce*100
+sce <- select(sce,-sce)
+
+ggplot() + 
+  geom_map(data=us, map = us, aes(x = long, y = lat, map_id = region), fill = "#ffffff", size = .15) +
+  geom_map(data = sce, map = us, aes(fill = sce_average_over_36_years, map_id=region), color = "#ffffff", size = .15) + 
+  scale_fill_continuous(low = "thistle2",high = "darkred", guide = "colorbar", name = "Average SCE %") + 
+  labs(x = NULL, y = NULL,title = "SCE average (1977-2013), by State") + 
+  theme(plot.title = element_text(size = 10,color = "blue"),
+        panel.border = element_blank(),
+        panel.background = element_blank(),
+        axis.ticks = element_blank(),
+        axis.text = element_blank(),
+        plot.title = element_text(size = 15), 
+        strip.background = element_blank())
+
+sce_rate <- sce %>%
+  group_by(region) %>%
+  arrange(desc(sce_average_over_36_years))
+```
+
+#Third Plot
+http://www2.census.gov/ces/bds/firm/bds_f_szsic_release.csv
+```{r, fig.width=10, fig.height=8}
+jobs <- read.csv("/Users/sambamamba/Desktop/Stat_133/Stat_133 Stuff/Group Project/sizepersector.csv")
+
+jobs <- select(jobs, sic1,fsize,Job_Creation_Rate, Job_Destruction_Rate,year2)
+
+jobs <- jobs[as.numeric(word(jobs$fsize,-1)) < 100,]
+
+jobs <- jobs[!is.na(jobs$sic1),]
+
+sic1 <- c(7,10,15,20,40,50,52,60,70)
+
+sector <- c("Agriculture, Forestry, and Fishing","Mining","Construction","Manufacturing","Transportation, Communication,
+and Public Utilities","Wholesale Trade","Retail Trade","Finance, Insurance, and Real Estate","Services")
+
+df <- as.data.frame(cbind(sic1,sector))
+
+jobs <- merge(df,jobs,by="sic1")
+jobs <- select(jobs,-sic1)
+
+jobs <- aggregate(cbind(Job_Destruction_Rate, Job_Creation_Rate) ~ year2 + sector, data = jobs, FUN = 'mean')
+
+jobs %>%
+  ggplot(aes(x = year2)) + 
+  geom_line(aes(y = Job_Creation_Rate, color = "Job Creation")) +
+  geom_line(aes(y = Job_Destruction_Rate, color = "Job Destruction")) + 
+  facet_wrap(~sector) + 
+  labs(y = "Amount of Jobs", x = "Year", title = "Job Creation/Destruction Rate") + 
+  scale_fill_manual(name = "Type of Rate", labels = c("Job Creation","Job Destruction")) + 
+  theme(
+    panel.border = element_blank(),
+    panel.background = element_blank(), 
+    strip.background = element_blank(),
+    axis.line = element_line(color = "black"),
+    strip.text.x = element_text(size = 12),
+    plot.title = element_text(size = 20)) 
+
+jobs$difference = jobs$Job_Creation_Rate - jobs$Job_Destruction_Rate
+
+jobs %>%
+  ggplot(aes(x = year2, y = difference)) +
+  geom_point() + 
+  geom_smooth() + 
+  facet_wrap(~sector) + 
+  labs(y = "Difference", x = "Year", title = "Percent Difference Between Job Creation and Job Destruction") +
+  theme(plot.title = element_text(size = 20), 
+        panel.background = element_blank(), 
+        strip.background = element_blank(),
+        strip.text.x = element_text(size = 12)
+        ) +
+   geom_hline(yintercept = 0, color = "red")
+
+```

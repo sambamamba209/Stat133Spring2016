@@ -1,0 +1,12 @@
+---
+title: "GDP definition"
+author: "Samba Njie Jr"
+date: "May 1, 2016"
+output: word_document
+---
+
+$$GDP = C + G + I + NX$$
+
+
+
+
